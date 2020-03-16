@@ -1,7 +1,5 @@
 from helper.awx_api import Tower
-from helper.linux import LinuxSSH
 from getpass import getpass
-import sys
 
 password = getpass()
 tower_config = {

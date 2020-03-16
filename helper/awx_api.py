@@ -12,7 +12,6 @@ Ansible AWX/Tower API wrapper is written as lab and testing code to teach myself
 my own python practice.
 """
 import json
-import yaml
 from typing import Optional, Dict, Any, Union, Tuple
 
 import requests
