@@ -9,3 +9,5 @@ This is a REST API wrapper of Ansible AWX 9.2.0. This is meant for my own consum
 - example3.py: demonstrates how to create an inventory, and a host in an inventory.
 
 - example4.py: demonstrates how to create a project, and create a new project directory within linux that hosts Ansible AWX.
+
+- example5.py: demonstrates how to upload file to the target centos server that hosts the ansible awx, and create a job template.
