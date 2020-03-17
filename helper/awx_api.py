@@ -894,9 +894,11 @@ class Tower:
             "webhook_credential": "" if webhook_credential is None else webhook_credential
         }
         if isinstance(project_id, str):
-            response = self.find_resource_id(resource="projects", name=project_id)
-            if response.get("found"):
-                payload.update({"project": response.get("result")})
+            project_response = self.find_resource_id(resource="projects", name=project_id)
+            if project_response.get("found"):
+                payload.update({"project": project_response.get("result")})
+            else:
+                return project_response
         elif isinstance(project_id, int):
             payload.update({"project": project_id})
         else:
@@ -905,9 +907,11 @@ class Tower:
                 "message": "project_id must be either string or integer."
             }
         if isinstance(inv_id, str):
-            response = self.find_resource_id(resource="inventories", name=inv_id)
-            if response.get("found"):
-                payload.update({"inventory": response.get("result")})
+            inv_response = self.find_resource_id(resource="inventories", name=inv_id)
+            if inv_response.get("found"):
+                payload.update({"inventory": inv_response.get("result")})
+            else:
+                return inv_response
         elif isinstance(inv_id, int):
             payload.update({"inventory": inv_id})
         else:

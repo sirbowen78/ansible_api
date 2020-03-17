@@ -230,14 +230,17 @@ class LinuxSSH(SSHClient):
 
     def upload(self, src_path: str = HOME_PATH,
                src_filename: str = None,
-               dst_abs_path: str = None):
+               dst_filename: str = None,
+               dst_path: str = None):
         """
         This method uploads the file from your computer to remote server.
+        :param dst_filename:
+        :param dst_home_path:
         :param src_filename:
             src_filename, this is for used with get_file_hash.
         :param src_path:
             the base path of where the src_filename can be found.
-        :param dst_abs_path:
+        :param dst_path:
             The absolute path the file will be uploaded. os.path.join works properly in source, if the remote is
             a different OS the path will be wrong.
         :return:
@@ -246,7 +249,7 @@ class LinuxSSH(SSHClient):
             local_path = os.path.join(src_path, src_filename)
         else:
             local_path = src_path
-        remote_path = dst_abs_path
+        remote_path = f"{dst_path}/{dst_filename}"
         digest_filename = get_file_hash(base_path=src_path, filename=src_filename)
         digest_abs_path = os.path.join(src_path, digest_filename)
         with self.open_sftp() as sftp:
@@ -257,11 +260,15 @@ class LinuxSSH(SSHClient):
             # b is bit, B is byte. If ascii=True, # will be used for progress bar.
             callback, pbar = progress_bar(unit="B", unit_scale=True, miniters=1)
             try:
+                sftp.chdir(dst_path)
                 sftp.put(local_path, remote_path, callback=callback)
                 # The session to remote_path is still on, hence only target filename is required.
-                sftp.put(digest_abs_path, digest_filename, callback=callback)
+                sftp.put(digest_abs_path, f"{dst_path}/{digest_filename}", callback=callback)
+                stdin, _, _ = self.exec_command(f"sudo chown -R awx:awx {dst_path}")
+                stdin.write(f"{self.password}\n")
+                stdin.flush()
             except CONN_EXCEPTION as CE:
                 return {
-                    "status": "failed",
-                    "message": str(CE)
-                }
+                        "status": "failed",
+                        "message": str(CE)
+                    }
