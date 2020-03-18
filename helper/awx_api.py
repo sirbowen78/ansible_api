@@ -162,9 +162,11 @@ class Tower:
         try:
             response = requests.post(url, **config)
             response.raise_for_status()
+            # I have realized when posting /api/v2/job_templates/{id}/credentials/ returns an empty response hence
+            # json decoder will raise an exception as server did not return a valid json response.
             return {
                 "status": response.status_code,
-                "response": json.loads(response.text)
+                "response": response.json() if response.content else "response has no content."
             }
         except CONN_ERROR as e:
             # 522 - Connection timeout.
@@ -938,26 +940,13 @@ class Tower:
         # if Ansible AWX says it is a bad request.
         required = ["name", "job_type", "inventory", "project", "playbook", "verbosity"]
         if all(k in payload for k in required):
-            job_create_response = self.post_request(url, is_https_status, payload)
+            return self.post_request(url, is_https_status, payload)
         else:
             return {
                 "status": "failed",
                 "message": "Insufficient mandatory parameters, see required.",
                 "required": ", ".join(required)
             }
-        if job_create_response["status"] == 201:
-            if isinstance(credential, str):
-                get_cred_response = self.find_resource_id(resource="credentials", name=credential)
-                if get_cred_response.get("found"):
-                    return self.create_job_templates_cred(cred_id=get_cred_response.get("result"),
-                                                          job_template_id=self.find_resource_id(
-                                                              resource="job_templates",
-                                                              name=name).get("result"),
-                                                          name=credential)
-                else:
-                    return job_create_response
-            else:
-                return job_create_response
 
     def job_launch(self, job_id: Union[str, int] = None, extra_vars: Dict = None):
         if isinstance(job_id, str):
@@ -1002,6 +991,8 @@ class Tower:
         :param name:
             This is the name of the credential, this is mandatory field. If you need to add
             an existing credential to job templates the name must be specified.
+            BUT if you add an existing credential id, then no need to put in name, the method will
+            find out the name of the credential id itself.
         :param org_id:
             This is the organization id, in this method if you supply a string the method will find
             the organization id for you.
@@ -1040,10 +1031,13 @@ class Tower:
                 }
                 return self.post_request(url, is_https_status, add_cred_payload)
         elif isinstance(cred_id, int):
+            # if cred_id is supplied, no need to put name for this method, as this method will find out
+            # the name of the cred_id.
             response = self.get_resource_info(resource="credentials", resource_id=cred_id)
             if response.status_code == 200:
+                cred_name = response.json().get("name")
                 add_cred_payload = {
-                    "name": response.json().get("name"),
+                    "name": cred_name if name is None else name,
                     "id": cred_id
                 }
                 return self.post_request(url, is_https_status, add_cred_payload)
