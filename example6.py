@@ -1,4 +1,5 @@
-from helper.awx_api import Tower, SSH_INPUTS
+from helper.awx_api import Tower
+from helper.credential_types_inputs import SSH_INPUTS
 from getpass import getpass
 from pprint import pprint
 
