@@ -765,6 +765,7 @@ class Tower:
     def create_job_template(self,
                             name: str = "NewTemplate",
                             desc: str = None,
+                            credential: str = None,
                             job_type: str = "run",
                             inv_id: Union[str, int] = None,
                             project_id: Union[str, int] = None,
@@ -802,6 +803,10 @@ class Tower:
         """
         This job_template creation requires a lot of parameters,
         read the ansible tower api reference guide for details.
+        :param credential:
+            If there is an existing credential you wish to add to the job tempalte.
+            If this is provided the method will call another
+            api endpoint /api/v2/job_templates/{id}/credentials/.
         :param name:
             required parameter to specify the job_templates name.
         :param desc:
@@ -934,13 +939,26 @@ class Tower:
         # if Ansible AWX says it is a bad request.
         required = ["name", "job_type", "inventory", "project", "playbook", "verbosity"]
         if all(k in payload for k in required):
-            return self.post_request(url, is_https_status, payload)
+            job_create_response = self.post_request(url, is_https_status, payload)
         else:
             return {
                 "status": "failed",
                 "message": "Insufficient mandatory parameters, see required.",
                 "required": ", ".join(required)
             }
+        if job_create_response["status"] == 201:
+            if isinstance(credential, str):
+                get_cred_response = self.find_resource_id(resource="credentials", name=credential)
+                if get_cred_response.get("found"):
+                    return self.create_job_templates_cred(cred_id=get_cred_response.get("result"),
+                                                          job_template_id=self.find_resource_id(
+                                                              resource="job_templates",
+                                                              name=name).get("result"),
+                                                          name=credential)
+                else:
+                    return job_create_response
+            else:
+                return job_create_response
 
     def job_launch(self, job_id: Union[str, int] = None, extra_vars: Dict = None):
         if isinstance(job_id, str):
@@ -965,3 +983,258 @@ class Tower:
             "extra_vars": extra_vars
         }
         return self.post_request(url, is_https_status, payload)
+
+    def create_job_templates_cred(self,
+                                  cred_id: Union[str, int] = None,
+                                  desc: str = None,
+                                  job_template_id: Union[str, int] = None,
+                                  name: str = "NewCredential",
+                                  org_id: Union[str, int] = None,
+                                  credential_type: Union[str, int] = None,
+                                  inputs: Union[Dict[str, str], Dict[str, int], Dict[str, bool]] = None):
+        """
+        This creates a new credential for job template.
+        :param desc:
+        :param job_template_id:
+            This is the job template id which is part of the api uri. If you provide a string,
+            this method will find the job template id for you.
+        :param cred_id:
+            This is required if you want to add an existing credential to job templates.
+        :param name:
+            This is the name of the credential, this is mandatory field. If you need to add
+            an existing credential to job templates the name must be specified.
+        :param org_id:
+            This is the organization id, in this method if you supply a string the method will find
+            the organization id for you.
+        :param credential_type:
+            This is the credential type, if you specify a string the method will find the credential_type
+            id for you.
+        :param inputs:
+            This is the additional inputs such as username, password for different types of credential_type.
+        :return:
+        """
+        if isinstance(job_template_id, str):
+            find_response = self.find_resource_id(resource="job_templates", name=job_template_id)
+            if find_response.get("found"):
+                jt_id = find_response.get("result")
+                api_uri = f"/v2/job_templates/{jt_id}/credentials/"
+            else:
+                return {
+                    "status": "failed",
+                    "message": f"Supplied job template id {job_template_id} is not found."
+                }
+        elif isinstance(job_template_id, int):
+            api_uri = f"/v2/job_templates/{job_template_id}/credentials/"
+        else:
+            return {
+                "status": "failed",
+                "message": "Invalid object type for job_template_id."
+            }
+        is_https_status, base_url = self.get_api_url()
+        url = base_url + api_uri
+        if isinstance(cred_id, str):
+            find_cred = self.find_resource_id(resource="credentials", name=cred_id)
+            if find_cred.get("found"):
+                add_cred_payload = {
+                    "name": cred_id,
+                    "id": find_cred.get("result")
+                }
+                return self.post_request(url, is_https_status, add_cred_payload)
+        elif isinstance(cred_id, int):
+            response = self.get_resource_info(resource="credentials", resource_id=cred_id)
+            if response.status_code == 200:
+                add_cred_payload = {
+                    "name": response.json().get("name"),
+                    "id": cred_id
+                }
+                return self.post_request(url, is_https_status, add_cred_payload)
+        payload = {
+            "name": name
+        }
+        if isinstance(org_id, str):
+            find_org = self.find_resource_id(resource="organizations", name=org_id)
+            if find_org.get("found"):
+                org_id = find_org.get("result")
+            else:
+                return {
+                    "status": "failed",
+                    "message": f"The org_id {org_id} cannot be found."
+                }
+        elif isinstance(org_id, int):
+            find_org_response = self.get_resource_info(resource="organizations", resource_id=org_id)
+            if find_org_response.status_code == 200:
+                payload.update(
+                    {
+                        "organization": org_id
+                    }
+                )
+        payload.update(
+            {
+                "description": "" if desc is None else desc
+            }
+        )
+        if inputs is not None and isinstance(inputs, dict):
+            # If inputs has something and is a dict type then check which credential type and do fact checking
+            # accordingly.
+            if credential_type.lower() == "ssh":
+                """
+                    This block is to ensure the inputs dict conforms to Ansible AWX's requirement.
+                    For Machine/ssh credential type there is no requirement to put in any of these in inputs:
+                    username, password, become_method, become_username, become_password.
+                    """
+                if any(key in inputs for key in SSH_INPUTS):
+                    # if any key exists in the tuple SSH_INPUTS
+                    inputs = inputs_validator(inputs, SSH_INPUTS)
+                    if inputs != {}:
+                        # This is to guard against empty inputs is sent.
+                        # it is possible inputs is an empty dict when the inputs does not have required keys.
+                        payload.update(
+                            {
+                                "credential_type": CREDENTIAL_TYPES[credential_type.lower()],
+                                "inputs": inputs
+                            }
+                        )
+                        # This part will ignore the inputs if there is None supplied
+                        return self.post_request(url, is_https_status, payload)
+                    else:
+                        # if the inputs supplied has incorrect keys, this dictionary advises user with example.
+                        return {
+                            "status": "failed",
+                            "status_code": 400,
+                            "message": "Keys in inputs are incorrect, see example.",
+                            "example": dict(zip(SSH_INPUTS, ["admin",
+                                                             "password",
+                                                             "enable",
+                                                             "enable_user",
+                                                             "enable_pass"]))
+                        }
+
+            elif credential_type.lower() == "net":
+                """
+                    Network inputs requires at least username. password, authorize and authorize_password are optional.
+                    """
+                if "username" in inputs.keys():
+                    # Has confirmed at least the key username is present in inputs.
+                    inputs = inputs_validator(inputs, NET_INPUTS)
+                    payload.update(
+                        {
+                            "credential_type": CREDENTIAL_TYPES[credential_type.lower()],
+                            "inputs": inputs
+                        }
+                    )
+                    return self.post_request(url, is_https_status, payload)
+                else:
+                    # Send a helper message to user if compulsory key is not found in inputs.
+                    return {
+                        "status": "failed",
+                        "status_code": 400,
+                        "message": "The key username is compulsory, but is not found in inputs. See example.",
+                        "example": dict(zip(NET_INPUTS, ["admin", "password", "true", "enable_password"]))
+                    }
+            elif credential_type.lower() == "aws":
+                """
+                    This is best effort validation. I realize even if there is only username in inputs Ansible AWX accepts.
+                    This code block ensures username, password and security_token are available, all other invalid keys
+                    are removed.
+                    """
+                inputs = inputs_validator(inputs, AWS_INPUTS_OPTION)
+                if inputs == dict():
+                    # There will be a chance when no valid keys is in inputs, if this situation arises
+                    # inputs will be a dict() or {}, but this is not None, it simply means the dict is empty.
+                    # None type is an object not exactly means empty, so {} is not None it is dict type object.
+                    # Below sends a helper message with minimum requirement for creating aws credential.
+                    return {
+                        "status": "failed",
+                        "status_code": 400,
+                        "message": "Username and password are compulsory keys, but these are not found in inputs. See "
+                                   "example.",
+                        "example": dict(zip(AWS_INPUTS, ["accesskey", "secretkey"]))
+                    }
+                payload.update(
+                    {
+                        "credential_type": CREDENTIAL_TYPES[credential_type.lower()],
+                        "inputs": inputs
+                    }
+                )
+                return self.post_request(url, is_https_status, payload)
+            elif credential_type.lower() == "tower":
+                inputs = inputs_validator(inputs, TOWER_INPUTS)
+                if inputs == dict():
+                    return {
+                        "status": "failed",
+                        "status_code": 400,
+                        "message": "Invalid keys in inputs, see example.",
+                        "example": dict(zip(TOWER_INPUTS, ["https://authentication.url",
+                                                           "username",
+                                                           "password",
+                                                           True]))
+                    }
+                payload.update(
+                    {
+                        "credential_type": CREDENTIAL_TYPES[credential_type.lower()],
+                        "inputs": inputs
+                    }
+                )
+                return self.post_request(url, is_https_status, payload)
+            elif credential_type.lower() == "gitlab_token" or credential_type == "github_token":
+                """
+                Both gitlab and github shares the same params of inputs.
+                """
+                inputs = inputs_validator(inputs, GITLAB_TOKEN_INPUTS)
+                if inputs == dict():
+                    return {
+                        "status": "failed",
+                        "status_code": 400,
+                        "message": "Invalid keys in inputs. See example.",
+                        "example": {"token": "gitlab_or_github_token"}
+                    }
+                payload.update(
+                    {
+                        "inputs": inputs
+                    }
+                )
+                return self.post_request(url, is_https_status, payload)
+            elif credential_type.lower() == "hashivault_kv":
+                inputs = inputs_validator(inputs, HASHIVAULT_KV_INPUTS)
+                if inputs == dict():
+                    return {
+                        "status": "failed",
+                        "status_code": 400,
+                        "message": "Invalid keys in inputs. See example.",
+                        "example": dict(zip(HASHIVAULT_KV_INPUTS, ["https://192.168.1.1:8200",
+                                                                   "abcdefghijklmnop9999",
+                                                                   "v2"]))
+                    }
+                payload.update(
+                    {
+                        "credential_type": CREDENTIAL_TYPES[credential_type.lower()],
+                        "inputs": inputs
+                    }
+                )
+                return self.post_request(url, is_https_status, payload)
+            elif credential_type.lower() == "hashivault_ssh":
+                inputs = inputs_validator(inputs, HASHIVAULT_SSH_INPUTS),
+                if inputs == dict():
+                    return {
+                        "status": "failed",
+                        "status_code": 400,
+                        "message": "Invalid keys in inputs. See example.",
+                        "example": dict(zip(HASHIVAULT_SSH_INPUTS, ["https://192.168.1.1:8200",
+                                                                    "abcdefghijklmnop9999"]))
+                    }
+                payload.update(
+                    {
+                        "credential_type": CREDENTIAL_TYPES[credential_type.lower()],
+                        "inputs": inputs
+                    }
+                )
+                return self.post_request(url, is_https_status, payload)
+            else:
+                return {
+                    "status": "failed",
+                    "status_code": 400,
+                    "message": "Unrecognized credential_type. See \"supported\" for credential_type.",
+                    "supported": [key for key in CREDENTIAL_TYPES]
+                }
+        else:
+            return self.post_request(url, is_https_status, payload)
