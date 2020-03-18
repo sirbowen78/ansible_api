@@ -15,3 +15,5 @@ This is a REST API wrapper of Ansible AWX 9.2.0. This is meant for my own consum
 - example6.py: demonstrates organization creation, inventory creation, inventory hosts creation, project creation, job template creation, create credential for job template.
 
 - example7.py: demonstrates on removing resources.
+
+- example8.py: demonstrates on creation chaining by using the creation response, the creation begins from creating organization until job templates, and finally add existing credential to the created job.
