@@ -129,8 +129,7 @@ class Tower:
                 return {
                     "status": "failed",
                     "status_code": response.status_code,
-                    "message": "The script did not receive http status code "
-                               "204 hence it could have problem deleting the resource."
+                    "message": response.text
                 }
         except CONN_ERROR as CE:
             return {
@@ -1054,7 +1053,11 @@ class Tower:
         if isinstance(org_id, str):
             find_org = self.find_resource_id(resource="organizations", name=org_id)
             if find_org.get("found"):
-                org_id = find_org.get("result")
+                payload.update(
+                    {
+                        "organization": find_org.get("result")
+                    }
+                )
             else:
                 return {
                     "status": "failed",
