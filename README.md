@@ -20,6 +20,7 @@ This is a REST API wrapper of Ansible AWX 9.2.0. This is meant for my own consum
 
 # command line
 Usage example: python tower.py -u admin --host 192.168.1.1 --resource projects lab -p
+
 Required switches are -u/--user, --host and -p/--pass which are the username, hostname and password.
 -p/--pass will invoke a getpass() for you to type in the password on your screen securely.
 
