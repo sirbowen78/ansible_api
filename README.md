@@ -17,3 +17,10 @@ This is a REST API wrapper of Ansible AWX 9.2.0. This is meant for my own consum
 - example7.py: demonstrates on removing resources.
 
 - example8.py: demonstrates on creation chaining by using the creation response, the creation begins from creating organization until job templates, and finally add existing credential to the created job.
+
+# command line
+Usage example: python tower.py -u admin --host 192.168.1.1 --resource projects lab -p
+Required switches are -u/--user, --host and -p/--pass which are the username, hostname and password.
+-p/--pass will invoke a getpass() for you to type in the password on your screen securely.
+
+The --resource is to get the information of a specific resource name, such as I need to get the json response of a project named lab.
