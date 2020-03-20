@@ -15,6 +15,7 @@ import json
 from typing import Optional, Dict, Any, Union, Tuple
 
 import requests
+from requests import Response
 from requests.adapters import HTTPAdapter
 from requests.auth import HTTPBasicAuth
 from requests.exceptions import ConnectionError, ConnectTimeout, HTTPError
@@ -233,12 +234,12 @@ class Tower:
             return response
         except CONN_ERROR as CE:
             return {
-                "status": response.status_code,
+                "status": "failed",
                 "message": str(CE)
             }
         except HTTPError as HE:
             return {
-                "status": response.status_code,
+                "status": "failed",
                 "message": str(HE)
             }
 
@@ -264,17 +265,22 @@ class Tower:
         :return:
         """
         response = self.get_resource_info(resource=resource)
-        results = response.json()["results"]
-        for result in results:
-            if name in result["name"]:
-                return {
-                    "found": True,
-                    "result": int(result["id"])
-                }
-        return {
-            "found": False,
-            "result": f"Cannot find {name} in Ansible AWX."
-        }
+        if isinstance(response, Response):
+            # To ensure the response object is Response class before giving the json() result.
+            results = response.json()["results"]
+            for result in results:
+                if name in result["name"]:
+                    return {
+                        "found": True,
+                        "result": int(result["id"])
+                    }
+            return {
+                "found": False,
+                "result": f"Cannot find {name} in Ansible AWX."
+            }
+        else:
+            # if it is not Response type, then it is dict which signifies an exception while connecting.
+            return response
 
     def create_org(self, name: str = None, desc: Optional[str] = None, max_hosts: int = 0,
                    custom_virtualenv: str = None) -> Union[Dict[str, str], Dict[str, int]]:
