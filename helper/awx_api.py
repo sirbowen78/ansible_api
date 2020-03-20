@@ -231,6 +231,9 @@ class Tower:
             config.update({"verify": self.verify_ssl})
         try:
             response = requests.get(url, **config)
+            if response.status_code == 401:
+                # if unauthorized.
+                return response.json()
             return response
         except CONN_ERROR as CE:
             return {
@@ -266,6 +269,9 @@ class Tower:
         """
         response = self.get_resource_info(resource=resource)
         if isinstance(response, Response):
+            if response == 401:
+                # if password is incorrect or unauthorized.
+                return response.json()
             # To ensure the response object is Response class before giving the json() result.
             results = response.json()["results"]
             for result in results:

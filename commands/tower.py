@@ -6,7 +6,8 @@ from argparse import ArgumentParser
 from getpass import getpass
 import sys
 
-parser = ArgumentParser(description="This is a script that helps in operating Ansible AWX.")
+parser = ArgumentParser(description="This is a script that helps in operating Ansible AWX.",
+                        usage="python tower.py -u username --host 192.168.1.100 --resource projects lab -p")
 parser.add_argument("-u", "--user", type=str, dest="username", required=True)
 parser.add_argument("-p", "--pass", dest="password", required=True, action="store_true")
 parser.add_argument("--host", type=str, dest="server_addr", required=True)
@@ -35,7 +36,7 @@ if args.password:
     )
     tower = Tower(**tower_config)
 
-    if args.resource_info:
+    if len(args.resource_info) == 2:
         resource = args.resource_info[0]
         name = args.resource_info[1]
         resource_id = tower.find_resource_id(resource=resource, name=name)
@@ -45,3 +46,9 @@ if args.password:
         else:
             print(resource_id)
             sys.exit(1)
+    else:
+        print("--resource arguments in sufficient, requires a resource type and its name.")
+        sys.exit(1)
+else:
+    print("Password is incorrect or not supplied.")
+    sys.exit(1)
