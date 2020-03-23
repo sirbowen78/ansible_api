@@ -1,5 +1,7 @@
 """
-An attempt to construct a cli module for ansible tower/awx
+An attempt to construct a cli module for ansible tower/awx.
+I would need a filter in the command line in order to get useful information from json.
+Currently I am building it up bit by bit.
 """
 from helper.awx_api import Tower
 from argparse import ArgumentParser
@@ -19,6 +21,12 @@ parser.add_argument("--resource",
                     nargs="+",
                     dest="resource_info",
                     help="Resource type and name")
+parser.add_argument("--create", action="store_true", dest="create")
+parser.add_argument("--type", type=str, dest="type")
+parser.add_argument("--name", type=str, dest="name")
+parser.add_argument("--desc", type=str, dest="desc")
+parser.add_argument("--max-hosts", type=int, dest="max_hosts")
+parser.add_argument("--del", action="store_true", dest="delete")
 
 args = parser.parse_args()
 
@@ -36,7 +44,8 @@ if args.password:
     )
     tower = Tower(**tower_config)
 
-    if len(args.resource_info) == 2:
+    if args.resource_info and len(args.resource_info) == 2:
+        # if --resource is used check if there are two arguments.
         resource = args.resource_info[0]
         name = args.resource_info[1]
         resource_id = tower.find_resource_id(resource=resource, name=name)
@@ -46,8 +55,34 @@ if args.password:
         else:
             print(resource_id)
             sys.exit(1)
+    elif args.type.lower() == "organizations":
+        if args.create:
+            payload = dict(
+                name=args.name,
+                desc=args.desc if args.desc else "",
+                max_hosts=args.max_hosts if args.max_hosts else 0
+            )
+            print(tower.create_org(**payload))
+        elif args.delete:
+            resource_id = tower.find_resource_id(resource=args.type.lower(),
+                                                 name=args.name)
+            if resource_id.get("found"):
+                r = tower.delete_request(resource_id=resource_id.get("result"),
+                                         resource=args.type.lower())
+                print(r)
+            else:
+                print(resource_id)
+        else:
+            resource_id = tower.find_resource_id(resource=args.type.lower(),
+                                                 name=args.name)
+            if resource_id.get("found"):
+                r = tower.get_resource_info(resource=args.type.lower(),
+                                            resource_id=resource_id.get("result"))
+                print(r.json())
+            else:
+                print(resource_id)
     else:
-        print("--resource arguments in sufficient, requires a resource type and its name.")
+        print("--resource arguments insufficient, or the resource is currently not implemented in this version.")
         sys.exit(1)
 else:
     print("Password is incorrect or not supplied.")

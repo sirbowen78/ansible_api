@@ -18,10 +18,15 @@ This is a REST API wrapper of Ansible AWX 9.2.0. This is meant for my own consum
 
 - example8.py: demonstrates on creation chaining by using the creation response, the creation begins from creating organization until job templates, and finally add existing credential to the created job.
 
-# command line
-Usage example: python tower.py -u admin --host 192.168.1.1 --resource projects lab -p
+# Command Line
+Below example use an Ansible AWX 192.168.100.174, with default port 8052, username is admin and password is password.
+Current command line can only create and delete organizations, I am building up the command line bit by bit.
+### Get resource information
+1. Get organizations resource "cli_test" information:
+`python tower.py -u admin --host 192.168.100.174 -p --resource organizations cli_test`
+or `python tower.py -u admin -p --host 192.168.100.174 --type organizations --name cli_test`
 
-Required switches are -u/--user, --host and -p/--pass which are the username, hostname and password.
--p/--pass will invoke a getpass() for you to type in the password on your screen securely.
-
-The --resource is to get the information of a specific resource name, such as I need to get the json response of a project named lab.
+### Create resource
+1. Create an organization:
+In this example I will create a new organization "new organizations", if the string has no space then no double quotes is needed.
+`python tower.py -u admin -p --host 192.168.100.174 --create --type organizations --name "new organizations"`
